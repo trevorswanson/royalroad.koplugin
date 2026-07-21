@@ -9,6 +9,45 @@ local function trim(s)
     return s:gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+local function escapeLuaPattern(s)
+    return (s:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1"))
+end
+
+-- Royal Road (and other sites scraped by tools like it) injects decoy
+-- paragraphs/spans into chapter content and hides them with a per-page
+-- generated CSS class (e.g. ".a1b2c3{display:none;speak:never;}") so that
+-- copy-pasted or scraped text carries an invisible watermark. Find those
+-- generated class names by scanning <style> blocks for the display:none +
+-- speak:never/none signature.
+local function findHiddenClasses(html)
+    local hidden = {}
+    for style_body in html:gmatch("<style[^>]*>(.-)</style>") do
+        local clean = style_body:gsub("%s+", "")
+        for cls, body in clean:gmatch("%.([%w%-_]+)%{([^}]*)%}") do
+            if body:find("display:none", 1, true)
+                and (body:find("speak:never", 1, true) or body:find("speak:none", 1, true)) then
+                hidden[cls] = true
+            end
+        end
+    end
+    return hidden
+end
+
+-- Removes elements matching the given hidden class names (whole-word match
+-- within the class attribute) from a fragment of HTML, plus anything
+-- explicitly hidden via an inline display:none style as a defensive extra.
+local function stripHiddenElements(content, hidden_classes)
+    if hidden_classes then
+        for cls in pairs(hidden_classes) do
+            local esc = escapeLuaPattern(cls)
+            local pattern = '<(%a[%w]*)[^>]-%sclass%s*=%s*"[^"]-%f[%w]' .. esc .. '%f[%W][^"]*"[^>]*>.-</%1%s*>'
+            content = content:gsub(pattern, "")
+        end
+    end
+    content = content:gsub('<(%a[%w]*)[^>]-%sstyle%s*=%s*"[^"]-display%s*:%s*none[^"]*"[^>]*>.-</%1%s*>', "")
+    return content
+end
+
 function M:extractTitle(html)
     local title = html:match('<h1[^>]*property="name"[^>]*>%s*(.-)%s*</h1>')
         or html:match('<h1[^>]*>%s*(.-)%s*</h1>')
@@ -150,6 +189,7 @@ function M:extractChapterContent(html)
             depth = depth - 1
             if depth == 0 then
                 local content = html:sub(content_start, close_pos - 1)
+                content = stripHiddenElements(content, findHiddenClasses(html))
                 return content
             end
             pos = close_pos + 6
