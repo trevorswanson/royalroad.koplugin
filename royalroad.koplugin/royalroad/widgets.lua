@@ -9,6 +9,7 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local ImageWidget    = require("ui/widget/imagewidget")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local ProgressWidget = require("ui/widget/progresswidget")
 local RenderText     = require("ui/rendertext")
 local Size           = require("ui/size")
 local TextBoxWidget  = require("ui/widget/textboxwidget")
@@ -124,9 +125,14 @@ function StoryListItem:init()
     end
     local n_chapters = story.chapter_urls and #story.chapter_urls or 0
     if n_chapters > 0 then
+        local chapters_text = T(_("%1 chapters"), n_chapters)
+        if story.read_percent then
+            chapters_text = T(_("%1/%2 chapters (%3%)"),
+                story.chapters_read or 0, n_chapters, math.floor(story.read_percent * 100 + 0.5))
+        end
         table.insert(info_group, VerticalSpan:new{ width = 2 })
         table.insert(info_group, TextWidget:new{
-            text      = T(_("%1 chapters"), n_chapters),
+            text      = chapters_text,
             face      = Font:getFace("smallffont"),
             max_width = text_width,
             fgcolor   = Blitbuffer.COLOR_DARK_GRAY,
@@ -262,9 +268,20 @@ function StoryCoverCell:init()
     }
 
     local title_height = math.ceil(14 * 1.3) * 2
-    local inner_h = self.cover_height + (self.show_title and (4 + title_height) or 0)
+    local progress_bar_h = self.story.read_percent and (2 + Size.line.medium) or 0
+    local inner_h = self.cover_height + progress_bar_h + (self.show_title and (4 + title_height) or 0)
 
     local content = VerticalGroup:new{ align = "center", cover_widget }
+    if self.story.read_percent then
+        table.insert(content, VerticalSpan:new{ width = 2 })
+        table.insert(content, ProgressWidget:new{
+            width      = self.cover_width,
+            height     = Size.line.medium,
+            percentage = self.story.read_percent,
+            margin_h   = 0,
+            margin_v   = 0,
+        })
+    end
     if self.show_title then
         local title_widget = TextBoxWidget:new{
             text      = self.story.title or "",
