@@ -842,7 +842,8 @@ function M:rebuildEPUBWithNewChapters(state)
     -- Restore reading position synchronously after EPUB rebuild.
     -- No timer delay needed since saveAsEPUB completed synchronously,
     -- avoiding races with KOReader's file detection.
-    if state.old_position.last_xpointer or state.old_position.percent_finished then
+    local was_complete = state.old_position.summary and state.old_position.summary.status == "complete"
+    if state.old_position.last_xpointer or state.old_position.percent_finished or was_complete then
         local ok, doc_settings = pcall(function()
             local entry = self.downloaded_stories[state.fiction_id]
             return DocSettings:open(entry and entry.epub_path or state.story.epub_path)
@@ -872,7 +873,7 @@ function M:rebuildEPUBWithNewChapters(state)
                         state.old_position.percent_finished * (old_total / new_total)
                 end
             end
-            if state.old_position.summary and state.old_position.summary.status == "complete" then
+            if was_complete then
                 local summary = doc_settings.data.summary or {}
                 summary.status = "reading"
                 doc_settings.data.summary = summary
